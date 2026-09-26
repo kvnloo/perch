@@ -327,7 +327,8 @@ The bare list form still works.
 
 ## Issue types
 
-A scan asks about defects, vulnerabilities and rules.
+A scan asks about defects and rules. Vulnerabilities are asked for with
+`--filter type=security`, or by adding `security` to `scan_types`.
 
 `refactor` and `docs` read the same on every method that has ever been long. A
 scan of this repository reported 32 of them against 0 defects, so they are asked

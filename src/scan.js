@@ -142,9 +142,13 @@ const createLineReader = (root, graph) => {
  * since narrowing a report to a type you did not ask the questions for would report that you have none of them. Asked, they
  * fail a run like anything else.
  */
-/** perch's own questions for a method, narrowed to the issue types this run asks about. A question raising none is feeder for one that does, so it stays. */
-const methodQuestions = (kinds, language) => questionSet().filter(question => question.each === 'method' && !question.kind
-  && appliesToLanguage(question, language) && (!question.issue || kinds.has(question.issue.type)));
+/**
+ * perch's own questions for a method, narrowed to its language and to the issue types this run asks about. A question raising
+ * no issue comes along only when a kept one needs it: `security_relevant` gates the security checks and is not asked without them.
+ */
+const methodQuestions = (kinds, language) => questionsFor(
+  questionSet().filter(question => question.each === 'method' && !question.kind && appliesToLanguage(question, language)),
+  [...kinds].map(value => ({ key: 'type', value })));
 
 export const typesAsked = (scanTypes, filters = []) => new Set([
   ...(scanTypes ?? DEFAULT_TYPES),

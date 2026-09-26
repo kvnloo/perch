@@ -125,7 +125,8 @@ distribution over its levels.
 | `kind` | choice over 8 | `boundary`, `missing_null_handling`, `wrong_return`, `swallowed_error`, `state_mutation`, `ordering`, `resource_leak`, `inverted_condition`. |
 | `severity` | score over 4 levels | The rubric below. |
 | `bug_*` | 15 nouls | Specific behavioral bug types, including boundaries, state, error handling, and concurrency. |
-| `security_any` | noul | Any concrete reachable security vulnerability. |
+| `security_relevant` | noul | Should the method be checked for security at all? Every security question below is multiplied by it. |
+| `security_any` | noul | Can an attacker exploit the method? |
 | `cwe_*` | Up to 31 nouls | The 2025 MITRE Top 25 CWEs and six more, filtered by language where needed. |
 | `misuse_N` | noul per callee | Does this call violate the callee's evident contract? |
 | `misused_by_N` | noul per caller | Does the caller violate this method's contract? |
@@ -167,11 +168,18 @@ Each answer becomes at most one issue, carrying the probability that it is real.
 
 **A defect** is the strongest of the broad `has_bug` question, the 15 specific
 bug checks, and the contract check. The broad result uses the `kind` choice
-for its label; the specific checks use their own names.
+for its label; the specific checks use their own labels.
 
 **A vulnerability** is the strongest answer among `security_any` and the
-applicable CWE checks. A memory-safety check does not apply to a language
-without native memory operations; the broad security check still does.
+applicable CWE checks, each multiplied by `security_relevant`:
+
+```
+P(vulnerable) = P(check) × P(security_relevant)
+```
+
+A memory-safety check does not apply to a language without native memory
+operations; the broad security check still does. Vulnerabilities are asked
+only with `--filter type=security` or `security` in `scan_types`.
 
 **Design issues** are the refactor the `refactor` choice picked, `1 − P(does what
 it claims)`, and `docs`.

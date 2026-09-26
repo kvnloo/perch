@@ -92,14 +92,19 @@
     label: docs
     on: false
   min: 75
+- name: security_relevant
+  each: method
+  where: "**/*"
+  ask: "Should `method` be checked for security vulnerabilities?"
+  "true": "Input from outside the program reaches it, it acts on data that belongs to a particular user, or it authenticates, authorizes, encrypts, handles secrets, or touches files, the network, a database, a shell or raw memory."
+  "false": "It only works on trusted values from inside the program."
 - name: security_any
   each: method
   where: "**/*"
-  ask: Does this method contain a concrete security vulnerability an attacker can reach?
-  "true": A concrete path crosses a security boundary and can be exploited; name a reachable source,
-    sensitive operation, and missing or incorrect protection.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can an attacker exploit `method`?"
+  "true": "An attacker can use it to do something they should not be able to."
+  "false": "An attacker cannot exploit it."
+  when: security_relevant
   issue:
     type: security
     label: vulnerability
@@ -108,10 +113,9 @@
 - name: bug_boundary
   each: method
   where: "**/*"
-  ask: Does an index, comparison, range, or edge case produce a wrong result for a reachable input?
-  "true": A reachable boundary or off-by-one case produces an incorrect result or state.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` get a boundary wrong, such as an off-by-one index or range?"
+  "true": "An index, range or comparison is off by one or misses an edge."
+  "false": "Its indexes, ranges and comparisons are right at the edges."
   issue:
     type: defect
     label: off_by_one
@@ -120,11 +124,9 @@
 - name: bug_missing_value
   each: method
   where: "**/*"
-  ask: Does a reachable null, absent, empty, or missing value break the method?
-  "true": A value a caller can supply or cause is missing and the method returns incorrectly or fails
-    unexpectedly.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` break when a value is null, undefined, empty or missing?"
+  "true": "A missing value makes it fail or return the wrong thing."
+  "false": "It handles missing values."
   issue:
     type: defect
     label: unhandled_null
@@ -133,10 +135,9 @@
 - name: bug_wrong_condition
   each: method
   where: "**/*"
-  ask: Does a wrong or inverted condition take the wrong branch for a reachable input?
-  "true": A concrete reachable case takes a branch that violates the visible contract.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` have a wrong or inverted condition?"
+  "true": "A condition sends some input down the wrong branch."
+  "false": "Its conditions are right."
   issue:
     type: defect
     label: inverted_condition
@@ -145,10 +146,9 @@
 - name: bug_wrong_result
   each: method
   where: "**/*"
-  ask: Does the method return the wrong value or shape for a reachable input?
-  "true": A concrete reachable input gives a result inconsistent with the visible caller contract.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` return the wrong value for some input?"
+  "true": "Some input gets a wrong result, or a result of the wrong shape."
+  "false": "It returns the right value for its inputs."
   issue:
     type: defect
     label: wrong_return_value
@@ -157,11 +157,9 @@
 - name: bug_state_update
   each: method
   where: "**/*"
-  ask: Does the method change, retain, or share state incorrectly?
-  "true": A reachable path leaves required state stale, mutates state it must preserve, or exposes an
-    incorrect update.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` change state wrongly?"
+  "true": "It changes state it should leave alone, or leaves stale state it should update."
+  "false": "Its state changes are right."
   issue:
     type: defect
     label: bad_state_change
@@ -170,10 +168,9 @@
 - name: bug_ordering
   each: method
   where: "**/*"
-  ask: Do operations happen in the wrong order, including asynchronous completion?
-  "true": A reachable ordering causes an incorrect result, state, or side effect.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` do things in the wrong order?"
+  "true": "Its steps, including asynchronous ones, run or finish in an order that gives a wrong result."
+  "false": "Its steps run in a correct order."
   issue:
     type: defect
     label: wrong_order
@@ -182,11 +179,9 @@
 - name: bug_error_handling
   each: method
   where: "**/*"
-  ask: Does the method mishandle a reachable error?
-  "true": It suppresses, misreports, mishandles, or fails to propagate a concrete error contrary to
-    the visible contract.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` ignore or mishandle an error?"
+  "true": "An error is swallowed, misreported, or not passed on to its caller."
+  "false": "It handles its errors."
   issue:
     type: defect
     label: error_ignored
@@ -195,10 +190,9 @@
 - name: bug_resource_lifecycle
   each: method
   where: "**/*"
-  ask: Does the method leak, prematurely release, or reuse a resource?
-  "true": A concrete path mishandles a handle, lock, stream, transaction, connection, or similar resource.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` leak or misuse a resource?"
+  "true": "A file, lock, connection, stream or similar is leaked, released too early, or used after release."
+  "false": "It manages its resources."
   issue:
     type: defect
     label: leak
@@ -207,10 +201,9 @@
 - name: bug_api_contract
   each: method
   where: "**/*"
-  ask: Does the method call another API with arguments or assumptions that violate its visible contract?
-  "true": A concrete call violates the callee contract shown in context and causes wrong behavior.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` call something the wrong way?"
+  "true": "A call passes arguments or makes assumptions the callee does not accept."
+  "false": "Its calls match what the callees expect."
   issue:
     type: defect
     label: api_misuse
@@ -219,11 +212,9 @@
 - name: bug_numeric
   each: method
   where: "**/*"
-  ask: Does arithmetic, conversion, rounding, or numeric range handling produce a wrong result?
-  "true": A concrete reachable number causes overflow, truncation, precision loss, or wrong arithmetic
-    with observable impact.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` get arithmetic wrong?"
+  "true": "Overflow, truncation, rounding or a unit mistake gives a wrong number."
+  "false": "Its arithmetic is right."
   issue:
     type: defect
     label: numeric_error
@@ -232,11 +223,9 @@
 - name: bug_type_shape
   each: method
   where: "**/*"
-  ask: Does the method treat a value as a type or shape it may not have?
-  "true": A concrete reachable value violates an assumed type, variant, or structure and produces
-    wrong behavior.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` assume a value has a type or shape it may not have?"
+  "true": "A value of another type or shape reaches it and breaks it."
+  "false": "Its values have the types and shapes it assumes."
   issue:
     type: defect
     label: wrong_type
@@ -245,10 +234,9 @@
 - name: bug_concurrency
   each: method
   where: "**/*"
-  ask: Can concurrent or reentrant execution violate the method's contract?
-  "true": A concrete interleaving causes an incorrect state, result, or side effect.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` race with itself or with other code?"
+  "true": "Concurrent or reentrant calls can leave wrong state or a wrong result."
+  "false": "It is safe when called concurrently or reentrantly, or never is."
   issue:
     type: defect
     label: race_condition
@@ -257,10 +245,9 @@
 - name: bug_parsing
   each: method
   where: "**/*"
-  ask: Does parsing, encoding, or serialization change or misread a reachable value?
-  "true": A concrete value is parsed, encoded, or serialized incorrectly with observable impact.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` parse, encode or serialize a value wrongly?"
+  "true": "Some value is misread or changed when parsed, encoded or serialized."
+  "false": "Its parsing and encoding are right."
   issue:
     type: defect
     label: parse_error
@@ -269,11 +256,9 @@
 - name: bug_iteration
   each: method
   where: "**/*"
-  ask: Can a reachable input make iteration skip, repeat, or never finish when the contract requires
-    otherwise?
-  "true": A concrete loop or recursion path misses work, repeats it incorrectly, or fails to terminate.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does a loop or recursion in `method` go wrong?"
+  "true": "It skips items, repeats them, or never ends."
+  "false": "Its loops and recursion are right."
   issue:
     type: defect
     label: broken_loop
@@ -282,10 +267,9 @@
 - name: bug_unexpected_exception
   each: method
   where: "**/*"
-  ask: Does a reachable ordinary input cause an exception or panic the visible contract does not allow?
-  "true": A concrete input unexpectedly throws or panics and its callers do not intend that behavior.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can ordinary input make `method` throw or panic?"
+  "true": "Normal input causes an exception or panic its callers do not expect."
+  "false": "Ordinary input does not make it throw."
   issue:
     type: defect
     label: unexpected_exception
@@ -294,10 +278,10 @@
 - name: cwe_79
   each: method
   where: "**/*"
-  ask: Does this method have CWE-79 (Cross-site scripting) in a concrete reachable case?
-  "true": Attacker-controlled content reaches HTML or script output without context-appropriate encoding.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to cross-site scripting?"
+  "true": "Attacker-controlled text reaches HTML or script output without escaping."
+  "false": "Its output is escaped, or no attacker-controlled text reaches it."
+  when: security_relevant
   issue:
     type: security
     label: xss
@@ -306,10 +290,10 @@
 - name: cwe_89
   each: method
   where: "**/*"
-  ask: Does this method have CWE-89 (SQL injection) in a concrete reachable case?
-  "true": Attacker-controlled data changes SQL syntax because it is interpolated instead of bound as data.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to SQL injection?"
+  "true": "Outside input becomes part of the SQL text it runs."
+  "false": "Its SQL is fixed, or outside values are bound as parameters."
+  when: security_relevant
   issue:
     type: security
     label: sql_injection
@@ -318,10 +302,10 @@
 - name: cwe_352
   each: method
   where: "**/*"
-  ask: Does this method have CWE-352 (Cross-site request forgery) in a concrete reachable case?
-  "true": A state-changing browser request can be triggered without a required anti-CSRF or origin check.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to cross-site request forgery?"
+  "true": "A browser request that changes state is accepted without a CSRF token or origin check."
+  "false": "It checks for forgery, or changes nothing a browser request can trigger."
+  when: security_relevant
   issue:
     type: security
     label: csrf
@@ -330,11 +314,10 @@
 - name: cwe_862
   each: method
   where: "**/*"
-  ask: Does this method have CWE-862 (Missing authorization) in a concrete reachable case?
-  "true": A protected action or resource is reachable without the authorization check its visible
-    contract requires.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` skip an authorization check it needs?"
+  "true": "Anyone can perform its action or reach its data without a permission check."
+  "false": "It checks permission, or its action needs none."
+  when: security_relevant
   issue:
     type: security
     label: missing_authorization
@@ -348,10 +331,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-787 (Out-of-bounds write) in a concrete reachable case?
-  "true": A reachable index, pointer, or length writes outside an allocated object.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` write past the end of a buffer?"
+  "true": "An index, pointer or length lets it write outside the memory it owns."
+  "false": "Every write stays inside its buffer."
+  when: security_relevant
   issue:
     type: security
     label: out_of_bounds_write
@@ -360,10 +343,10 @@
 - name: cwe_22
   each: method
   where: "**/*"
-  ask: Does this method have CWE-22 (Path traversal) in a concrete reachable case?
-  "true": An attacker-controlled path escapes the intended directory or namespace.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to path traversal?"
+  "true": "An outside path can reach files beyond the directory it should be limited to."
+  "false": "Its paths are fixed or confined to their directory."
+  when: security_relevant
   issue:
     type: security
     label: path_traversal
@@ -377,10 +360,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-416 (Use after free) in a concrete reachable case?
-  "true": A reachable path uses memory after its lifetime ends.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` use memory after it is freed?"
+  "true": "It reads or writes through a pointer or reference after the memory is released."
+  "false": "It never uses memory after release."
+  when: security_relevant
   issue:
     type: security
     label: use_after_free
@@ -394,10 +377,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-125 (Out-of-bounds read) in a concrete reachable case?
-  "true": A reachable index, pointer, or length reads outside an allocated object.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` read past the end of a buffer?"
+  "true": "An index, pointer or length lets it read outside the memory it owns."
+  "false": "Every read stays inside its buffer."
+  when: security_relevant
   issue:
     type: security
     label: out_of_bounds_read
@@ -406,10 +389,10 @@
 - name: cwe_78
   each: method
   where: "**/*"
-  ask: Does this method have CWE-78 (OS command injection) in a concrete reachable case?
-  "true": Attacker-controlled data changes shell command syntax.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to OS command injection?"
+  "true": "Outside input becomes part of a shell command."
+  "false": "Its commands are fixed, or pass arguments without a shell."
+  when: security_relevant
   issue:
     type: security
     label: os_command_injection
@@ -418,10 +401,10 @@
 - name: cwe_94
   each: method
   where: "**/*"
-  ask: Does this method have CWE-94 (Code injection) in a concrete reachable case?
-  "true": Attacker-controlled data changes generated or evaluated program code.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to code injection?"
+  "true": "Outside input is evaluated or compiled as code."
+  "false": "It never runs outside input as code."
+  when: security_relevant
   issue:
     type: security
     label: code_injection
@@ -435,10 +418,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-120 (Classic buffer overflow) in a concrete reachable case?
-  "true": A copy can exceed the destination buffer because its size is not checked.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` copy more into a buffer than it holds?"
+  "true": "A copy's length is not checked against the size of its destination."
+  "false": "Every copy is bounded by its destination."
+  when: security_relevant
   issue:
     type: security
     label: buffer_overflow
@@ -447,10 +430,10 @@
 - name: cwe_434
   each: method
   where: "**/*"
-  ask: Does this method have CWE-434 (Unrestricted dangerous file upload) in a concrete reachable case?
-  "true": An attacker can upload a dangerous file type to a location where it can cause harm.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` accept a dangerous file upload?"
+  "true": "An uploaded file of any type can be stored where it can be run or served."
+  "false": "Uploads are checked, or stored where they cannot do harm."
+  when: security_relevant
   issue:
     type: security
     label: unsafe_file_upload
@@ -459,10 +442,10 @@
 - name: cwe_476
   each: method
   where: "**/*"
-  ask: Does this method have CWE-476 (NULL pointer dereference) in a concrete reachable case?
-  "true": A reachable null pointer or reference is dereferenced and causes an unintended failure.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` dereference a null pointer?"
+  "true": "A null pointer or reference is used on some path."
+  "false": "Nulls are checked before use."
+  when: security_relevant
   issue:
     type: security
     label: null_dereference
@@ -476,10 +459,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-121 (Stack buffer overflow) in a concrete reachable case?
-  "true": A reachable write can exceed a stack-allocated buffer.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` overflow a buffer on the stack?"
+  "true": "A write can go past the end of a stack buffer."
+  "false": "Its stack buffers are never overrun."
+  when: security_relevant
   issue:
     type: security
     label: stack_buffer_overflow
@@ -488,10 +471,10 @@
 - name: cwe_502
   each: method
   where: "**/*"
-  ask: Does this method have CWE-502 (Unsafe deserialization) in a concrete reachable case?
-  "true": Untrusted serialized data can instantiate attacker-chosen types or execute code.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` deserialize untrusted data unsafely?"
+  "true": "Outside data is deserialized in a way that can create arbitrary objects or run code."
+  "false": "It deserializes only trusted data, or only plain values."
+  when: security_relevant
   issue:
     type: security
     label: unsafe_deserialization
@@ -505,10 +488,10 @@
     - cpp
     - rust
     - zig
-  ask: Does this method have CWE-122 (Heap buffer overflow) in a concrete reachable case?
-  "true": A reachable write can exceed a heap-allocated buffer.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` overflow a buffer on the heap?"
+  "true": "A write can go past the end of a heap buffer."
+  "false": "Its heap buffers are never overrun."
+  when: security_relevant
   issue:
     type: security
     label: heap_buffer_overflow
@@ -517,10 +500,10 @@
 - name: cwe_863
   each: method
   where: "**/*"
-  ask: Does this method have CWE-863 (Incorrect authorization) in a concrete reachable case?
-  "true": An authorization check exists but incorrectly permits a protected action or resource.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` check authorization wrongly?"
+  "true": "Its permission check lets through someone who should be refused."
+  "false": "Its permission check is right."
+  when: security_relevant
   issue:
     type: security
     label: incorrect_authorization
@@ -529,11 +512,10 @@
 - name: cwe_20
   each: method
   where: "**/*"
-  ask: Does this method have CWE-20 (Improper input validation) in a concrete reachable case?
-  "true": A missing or incorrect validation lets attacker-controlled input cross a specific security
-    boundary.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` trust outside input it should validate?"
+  "true": "Outside input is used for something security-sensitive without being checked."
+  "false": "It validates the outside input it relies on."
+  when: security_relevant
   issue:
     type: security
     label: missing_input_validation
@@ -542,10 +524,10 @@
 - name: cwe_284
   each: method
   where: "**/*"
-  ask: Does this method have CWE-284 (Improper access control) in a concrete reachable case?
-  "true": A concrete access-control failure lets an actor use a protected resource or operation.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` let someone use something they should not have access to?"
+  "true": "A gap in access control lets the wrong actor use a protected resource or action."
+  "false": "Its access control is right."
+  when: security_relevant
   issue:
     type: security
     label: broken_access_control
@@ -554,10 +536,10 @@
 - name: cwe_200
   each: method
   where: "**/*"
-  ask: Does this method have CWE-200 (Sensitive information exposure) in a concrete reachable case?
-  "true": A concrete path reveals information to an actor not authorized to receive it.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` expose sensitive information?"
+  "true": "It returns, logs or sends secrets, tokens or personal data to someone who should not see them."
+  "false": "It exposes nothing sensitive."
+  when: security_relevant
   issue:
     type: security
     label: information_exposure
@@ -566,10 +548,10 @@
 - name: cwe_306
   each: method
   where: "**/*"
-  ask: Does this method have CWE-306 (Missing authentication) in a concrete reachable case?
-  "true": A critical function can be invoked without required authentication.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` skip authentication it needs?"
+  "true": "A sensitive action runs without confirming who is calling."
+  "false": "It authenticates the caller, or needs no authentication."
+  when: security_relevant
   issue:
     type: security
     label: missing_authentication
@@ -578,10 +560,10 @@
 - name: cwe_918
   each: method
   where: "**/*"
-  ask: Does this method have CWE-918 (Server-side request forgery) in a concrete reachable case?
-  "true": An attacker-controlled destination can make the server request an unintended resource.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to server-side request forgery?"
+  "true": "Outside input chooses where the server sends a request."
+  "false": "Its destinations are fixed or checked against an allow list."
+  when: security_relevant
   issue:
     type: security
     label: ssrf
@@ -590,10 +572,10 @@
 - name: cwe_77
   each: method
   where: "**/*"
-  ask: Does this method have CWE-77 (Command injection) in a concrete reachable case?
-  "true": Attacker-controlled data changes the syntax of a command interpreted by a command processor.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to command injection?"
+  "true": "Outside input changes a command passed to an interpreter."
+  "false": "Its commands are fixed, or outside input is passed as data."
+  when: security_relevant
   issue:
     type: security
     label: command_injection
@@ -602,11 +584,10 @@
 - name: cwe_639
   each: method
   where: "**/*"
-  ask: Does this method have CWE-639 (Authorization bypass by user-controlled key) in a concrete
-    reachable case?
-  "true": Changing a user-controlled identifier grants access to another actor's resource.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can a user reach someone else's data by changing an ID that `method` receives?"
+  "true": "It looks up a record by a user-supplied ID without checking the record belongs to them."
+  "false": "It checks ownership, or its records are not per user."
+  when: security_relevant
   issue:
     type: security
     label: idor
@@ -615,10 +596,10 @@
 - name: cwe_770
   each: method
   where: "**/*"
-  ask: Does this method have CWE-770 (Unbounded resource allocation) in a concrete reachable case?
-  "true": Attacker-controlled input can consume unbounded work, memory, or another finite resource.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can outside input make `method` use unbounded memory or work?"
+  "true": "An input size or count is not limited, so one request can exhaust memory, CPU or another resource."
+  "false": "Its work is bounded."
+  when: security_relevant
   issue:
     type: security
     label: resource_exhaustion
@@ -627,10 +608,10 @@
 - name: cwe_327
   each: method
   where: "**/*"
-  ask: Does this method have CWE-327 (Broken or risky cryptography) in a concrete reachable case?
-  "true": A password, token, signature, or secret relies on a broken or unsuitable algorithm, such as MD5 or SHA-1 for a credential, or on predictable randomness where it must be unguessable.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` use weak cryptography?"
+  "true": "It protects a password, token or secret with a broken algorithm such as MD5 or SHA-1, or uses predictable randomness where a value must be unguessable."
+  "false": "Its cryptography is sound, or it uses none."
+  when: security_relevant
   issue:
     type: security
     label: weak_crypto
@@ -639,10 +620,10 @@
 - name: cwe_295
   each: method
   where: "**/*"
-  ask: Does this method have CWE-295 (Improper certificate validation) in a concrete reachable case?
-  "true": TLS certificate or hostname verification is turned off or bypassed for a connection that needs it.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` turn off certificate checking?"
+  "true": "TLS certificate or hostname verification is disabled or bypassed."
+  "false": "It keeps certificate checking on, or makes no TLS connection."
+  when: security_relevant
   issue:
     type: security
     label: disabled_certificate_check
@@ -651,10 +632,10 @@
 - name: cwe_798
   each: method
   where: "**/*"
-  ask: Does this method have CWE-798 (Hard-coded credentials) in a concrete reachable case?
-  "true": A password, API key, private key, or other credential is written into the source.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Does `method` contain a hard-coded credential?"
+  "true": "A password, API key or private key is written in the source."
+  "false": "It contains no credential."
+  when: security_relevant
   issue:
     type: security
     label: hardcoded_secret
@@ -674,10 +655,10 @@
     - c_sharp
     - swift
     - solidity
-  ask: Does this method have CWE-190 (Integer overflow or wraparound) in a concrete reachable case?
-  "true": A reachable calculation wraps or overflows and the result is used as a size, index, amount, or security decision.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can arithmetic in `method` overflow in a way that matters?"
+  "true": "A calculation wraps or overflows and the result is used as a size, index, amount or security check."
+  "false": "Its arithmetic cannot overflow, or an overflow does no harm."
+  when: security_relevant
   issue:
     type: security
     label: integer_overflow
@@ -690,10 +671,10 @@
     - c
     - cpp
     - zig
-  ask: Does this method have CWE-908 (Use of uninitialized resource) in a concrete reachable case?
-  "true": A variable, field, or buffer is read before it is written on a reachable path.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Can `method` read memory before it is written?"
+  "true": "A variable, field or buffer is read before it is set on some path."
+  "false": "Everything it reads is set first."
+  when: security_relevant
   issue:
     type: security
     label: uninitialized_use
@@ -702,10 +683,10 @@
 - name: cwe_601
   each: method
   where: "**/*"
-  ask: Does this method have CWE-601 (Open redirect) in a concrete reachable case?
-  "true": A redirect target taken from the request can send the user to an arbitrary external site.
-  "false": No concrete reachable case is supported by the method and supplied context. A
-    possible-looking pattern alone is not enough.
+  ask: "Is `method` vulnerable to an open redirect?"
+  "true": "A redirect target from the request can send users to any site."
+  "false": "Its redirect targets are fixed or checked."
+  when: security_relevant
   issue:
     type: security
     label: open_redirect

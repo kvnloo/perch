@@ -155,7 +155,11 @@ export function parseIgnored(text, at) {
 }
 
 /** What a scan asks about unless `perch.yaml` names its own set. */
-export const DEFAULT_TYPES = ['defect', 'security', 'lint'];
+/**
+ * Security is asked for rather than asked by default: a vulnerability class read against every method of a CLI or a library
+ * mostly measures how far the code is from a network, and `--filter type=security` or `scan_types` asks it when it matters.
+ */
+export const DEFAULT_TYPES = ['defect', 'lint'];
 
 /**
  * The issue types a scan asks about, from `scan_types` in `perch.yaml`.
