@@ -446,6 +446,6 @@ perch rules add handles_absence --type choice --each method --where "src/**/*.js
 
 For example, `language: [c, cpp, rust]` asks a native-memory question only of
 methods parsed in those languages. Without `language`, the question applies
-to all snippets selected by `where`. `when` remains available when a question
-depends on another answer: `when: exposed` multiplies its probability by the
-answer to `exposed`. See [the questions](/scan/#the-questions).
+to all snippets selected by `where`. `when` names another question this one
+depends on, and multiplies its probability by that answer. See
+[the questions](/scan/#the-questions).

@@ -126,7 +126,7 @@ distribution over its levels.
 | `severity` | score over 4 levels | The rubric below. |
 | `bug_*` | 15 nouls | Specific behavioral bug types, including boundaries, state, error handling, and concurrency. |
 | `security_any` | noul | Any concrete reachable security vulnerability. |
-| `cwe_*` | Up to 25 nouls | The 2025 MITRE Top 25 CWEs, filtered by language where needed. |
+| `cwe_*` | Up to 31 nouls | The 2025 MITRE Top 25 CWEs and six more, filtered by language where needed. |
 | `misuse_N` | noul per callee | Does this call violate the callee's evident contract? |
 | `misused_by_N` | noul per caller | Does the caller violate this method's contract? |
 | `does_what_it_claims` | noul | Does the behavior match the name, parameters, and comment? |
@@ -134,9 +134,11 @@ distribution over its levels.
 | `refactor` | choice over 7 | `split`, `flatten`, `simplify_conditions`, `deduplicate`, `rename`, `remove_dead_code`, `none`. |
 | `follow` | choice over neighbors | Which related method to examine next. |
 
-The names in that table are the IDs written in `scan.yaml`. The specific
-security questions are named by CWE, such as `cwe_89` for SQL injection.
-`perch issues --types` lists the labels accepted by `--filter kind=`.
+The names in that table are the IDs written in `scan.yaml`. The security
+questions are named by CWE, and each specific question prints a label:
+`cwe_89` prints `sql_injection`, `cwe_862` prints `missing_authorization`,
+`bug_boundary` prints `off_by_one`. `perch issues --types` lists the labels
+`--filter kind=` accepts.
 
 System One does not bill output tokens, so asking thirty questions of a method
 costs what asking one costs. The whole set rides in one request, up to 128

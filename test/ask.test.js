@@ -10,7 +10,12 @@ describe('the question grammar', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toEqual(expect.arrayContaining(['has_bug', 'kind', 'severity', 'refactor', 'security_any', 'bug_boundary', 'cwe_79', 'cwe_416']));
     expect(names.filter(name => name.startsWith('bug_'))).toHaveLength(15);
-    expect(names.filter(name => name.startsWith('cwe_'))).toHaveLength(25);
+    expect(names.filter(name => name.startsWith('cwe_'))).toHaveLength(31);
+    // An ID says which check it was; the label is what a row prints, so it is a name a reader knows without a lookup.
+    const specific = BUILTIN.filter(question => /^(bug|cwe)_/.test(question.name));
+    expect(specific.filter(question => /^(bug|cwe)_|^self$/.test(question.issue.label))).toEqual([]);
+    expect(Object.fromEntries(specific.filter(question => ['cwe_89', 'cwe_862', 'cwe_327', 'bug_boundary'].includes(question.name))
+      .map(question => [question.name, question.issue.label]))).toEqual({ cwe_89: 'sql_injection', cwe_862: 'missing_authorization', cwe_327: 'weak_crypto', bug_boundary: 'off_by_one' });
     // Every shipped question is about a method, and the three shapes are all in use.
     expect(new Set(BUILTIN.map(question => question.each))).toEqual(new Set(['method']));
     expect(new Set(BUILTIN.map(question => question.type))).toEqual(new Set(['noul', 'choice', 'score']));
@@ -117,9 +122,7 @@ describe('the question grammar', () => {
     expect(check({ name: 'comment-says-why', where: 'src/**', ensure: 'A comment says why.' }, at).gate).toBe(true);
     expect(named('refactor').gate).toBe(true);
     expect(named('documented').gate).toBe(true);
-    // A question that only feeds another raises no issue and fails nothing: `kind` names a defect, `exposed` gates the classes
-    // that need it.
-    expect(named('kind').gate).toBe(false);
+    // A question that only feeds another raises no issue and fails nothing: `kind` names a defect.
     expect(named('kind').gate).toBe(false);
     // And a question says otherwise either way, which is how a judgement call gets read without stopping anything.
     expect(check({ name: 'r', where: '**/*.md', gate: false, ensure: 'x' }, at).gate).toBe(false);

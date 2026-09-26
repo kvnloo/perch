@@ -405,7 +405,7 @@ describe('perch hunt', () => {
     expect(merged).toMatchObject({ has_bug: 0.8, where: { line: 2600 }, kind: { choice: 'resource_leak' }, refactor: { choice: 'split' }, passes: 2 });
     // A class a later pass rated lower keeps the higher reading: a slice that saw less is not evidence of less.
     expect(merged).toMatchObject({ cwe_89: 0.9, cwe_416: 0.4 });
-    expect(securityOf(merged)).toEqual({ kind: 'cwe_89', probability: 0.9 });
+    expect(securityOf(merged)).toEqual({ kind: 'sql_injection', probability: 0.9 });
   });
 
   it('reads everything in scope and never questions test methods', async () => {
