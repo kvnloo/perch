@@ -6,7 +6,7 @@ import { git, revision } from '../src/git.js';
 import { createSourceAnalyzer } from '../src/analysis.js';
 import { mergeAnswers, scanRepository, typesAsked } from '../src/scan.js';
 import { parseScanTypes, questionSet } from '../src/ask.js';
-import { securityOf } from '../src/questions.js';
+import { securities, securityOf } from '../src/questions.js';
 import { methodStep, methodSteps, issueWeight, locateWhere, MAX_CHOICES, STATE_BUDGET } from '../src/questions.js';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { openStore } from '../src/store.js';
@@ -63,10 +63,12 @@ describe('keeping results out of git status', () => {
 });
 
 describe('which issue types a scan asks about', () => {
-  it('asks the three that can fail a run, and nothing else, unless perch.yaml says so', () => {
+  it('asks about defects and rules, and nothing else, unless perch.yaml or a filter says so', () => {
     // Refactor and docs never fail anything and read the same on every method that has ever been long. A scan of this
     // repository reported 32 of them against 0 defects, so the list a person opened was mostly rows they came for nothing.
-    expect([...typesAsked(null, [])].sort()).toEqual(['defect', 'lint', 'security']);
+    // Security is asked for: read against every method it mostly measures how far the code is from a network.
+    expect([...typesAsked(null, [])].sort()).toEqual(['defect', 'lint']);
+    expect([...typesAsked(null, [{ key: 'type', value: 'security' }])].sort()).toEqual(['defect', 'lint', 'security']);
     expect([...typesAsked(['defect', 'security', 'lint', 'refactor'], [])]).toContain('refactor');
     // Naming only some of them is naming them: this is the whole list, not an addition to the defaults.
     expect([...typesAsked(['docs'], [])]).toEqual(['docs']);
@@ -76,8 +78,13 @@ describe('which issue types a scan asks about', () => {
     // Narrowing a report to a type whose questions were never asked would report that the repository has none of them.
     expect([...typesAsked(null, [{ key: 'type', value: 'refactor' }])]).toContain('refactor');
     expect([...typesAsked(['defect'], [{ key: 'type', value: 'docs' }])].sort()).toEqual(['defect', 'docs']);
+    // A kind or a rule asks for the type of the question that raises it, so a filter for something the defaults leave out asks
+    // that question rather than reporting a clean run it never checked.
+    expect([...typesAsked(null, [{ key: 'kind', value: 'too big' }])].sort()).toEqual(['defect', 'lint', 'refactor']);
+    expect([...typesAsked(null, [{ key: 'kind', value: 'sql injection' }])].sort()).toEqual(['defect', 'lint', 'security']);
+    expect([...typesAsked(null, [{ key: 'rule', value: 'cwe 89' }])].sort()).toEqual(['defect', 'lint', 'security']);
     // A clause on another key says nothing about which questions to ask.
-    expect([...typesAsked(null, [{ key: 'kind', value: 'too big' }])].sort()).toEqual(['defect', 'lint', 'security']);
+    expect([...typesAsked(null, [{ key: 'severity', value: 'p1' }])].sort()).toEqual(['defect', 'lint']);
   });
 
   it('reads scan_types off the rule file, and says so when it is not a list', () => {
@@ -106,6 +113,38 @@ describe('which issue types a scan asks about', () => {
 });
 
 describe('perch hunt', () => {
+  it('asks only the builtin checks enabled for each parsed method language, and security only when asked for', async () => {
+    const repo = await fixture({ scanTypes: ['defect', 'security', 'lint'] });
+    await writeFile(join(repo.root, 'src/native.c'), 'int read_value(int *p) { return *p; }\n');
+    await commitAll(repo.root, 'add native method');
+    const systemOne = scriptedSystemOne();
+    const run = await scanRepository(await withRevision(repo, { systemOne }));
+    const js = systemOne.calls.find(call => call.method === 'src/a.js::f');
+    const native = systemOne.calls.find(call => call.method === 'src/native.c::read_value');
+    expect(js.questions).not.toHaveProperty('security_any');
+    expect(js.questions).toHaveProperty('cwe_89');
+    expect(js.questions).not.toHaveProperty('cwe_416');
+    expect(native.questions).toHaveProperty('cwe_416');
+    expect(run.coverage.find(item => item.name === 'cwe_416').units).toBe(1);
+
+    // Left to its defaults a scan asks no security question.
+    await writeFile(join(repo.root, 'perch.yaml'), 'rules: []\n');
+    await commitAll(repo.root, 'default scan types');
+    const plain = scriptedSystemOne();
+    await scanRepository(await withRevision(repo, { systemOne: plain }));
+    const asked = Object.keys(plain.calls.find(call => call.method === 'src/native.c::read_value').questions);
+    expect(asked.filter(name => /^(cwe_|security_)/.test(name))).toEqual([]);
+  });
+
+  it('asks the question a kind filter names, even when scan_types leaves its type out', async () => {
+    const repo = await fixture();
+    const systemOne = scriptedSystemOne();
+    const run = await scanRepository(await withRevision(repo, { systemOne, filters: [{ key: 'kind', value: 'sql injection' }] }));
+    // Asking nothing here skipped every method and reported the run clean, for a vulnerability no one had looked for.
+    expect(run.calls).toBeGreaterThan(0);
+    expect(systemOne.calls.every(call => 'cwe_89' in call.questions)).toBe(true);
+  });
+
   it('refreshes method, file and search answers when the model or endpoint changes', async () => {
     const repo = await fixture();
     await writeFile(join(repo.root, 'perch.yaml'), 'rules:\n  - name: file-rule\n    where: src/a.js\n    ensure: Returns a number.\n  - name: search-rule\n    where: src/a.js\n    ensure_present: A function returning a number.\n');
@@ -383,15 +422,16 @@ describe('perch hunt', () => {
     expect(steps[1].state.module_scope).toBeNull();
 
     // The worst defect anywhere in the method is the method's defect; the first pass still speaks for its shape.
-    const whole = { has_bug: 0.2, where: { line: 4 }, kind: { choice: 'boundary' }, exposed: 0.3, injection: 0.1, use_after_free: 0.4, refactor: { choice: 'split' } };
-    const later = { has_bug: 0.8, where: { line: 2600 }, kind: { choice: 'resource_leak' }, exposed: 0.9, injection: 0.9, use_after_free: 0.2, refactor: { choice: 'none' } };
+    const whole = { has_bug: 0.2, where: { line: 4 }, kind: { choice: 'boundary' }, cwe_89: 0.1, cwe_416: 0.4, refactor: { choice: 'split' } };
+    const later = { has_bug: 0.8, where: { line: 2600 }, kind: { choice: 'resource_leak' }, cwe_89: 0.9, cwe_416: 0.2, refactor: { choice: 'none' } };
     const merged = mergeAnswers([whole, later]);
-    expect(merged).toMatchObject({ has_bug: 0.8, where: { line: 2600 }, kind: { choice: 'resource_leak' }, exposed: 0.9, refactor: { choice: 'split' }, passes: 2 });
+    expect(merged).toMatchObject({ has_bug: 0.8, where: { line: 2600 }, kind: { choice: 'resource_leak' }, refactor: { choice: 'split' }, passes: 2 });
     // A class a later pass rated lower keeps the higher reading: a slice that saw less is not evidence of less.
-    expect(merged).toMatchObject({ injection: 0.9, use_after_free: 0.4 });
-    // Gated on exposure, injection is 0.9 x 0.9; use_after_free is wrong on its own terms, but at 0.4 it is under the floor
-    // the class carries, so the vulnerability that stands is the one that cleared it.
-    expect(securityOf(merged)).toEqual({ kind: 'injection', probability: 0.9 * 0.9 });
+    expect(merged).toMatchObject({ cwe_89: 0.9, cwe_416: 0.4 });
+    expect(securityOf(merged)).toEqual({ kind: 'sql_injection', probability: 0.9 });
+    // perch issues <id> lists every vulnerability under the label the table prints, not the ID of the question that asked it.
+    expect(securities(merged)).toMatchObject({ sql_injection: 0.9, use_after_free: 0.4 });
+    expect(Object.keys(securities(merged)).filter(name => name.startsWith('cwe_'))).toEqual([]);
   });
 
   it('reads everything in scope and never questions test methods', async () => {
