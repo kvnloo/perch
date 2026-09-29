@@ -1,5 +1,5 @@
 /** Tree-sitter analysis of tracked source files: per-method metrics plus the calls and imports that link them. */
-import { createAnalyzer } from './treesitter/index.ts';
+import { createAnalyzer, isNamed } from './treesitter/index.ts';
 import { sha256 } from './store.js';
 import { eligibleFile } from './exclusions.js';
 import { languageOf } from './languages.js';
@@ -22,25 +22,52 @@ const trim = metrics => metrics ? { risk_score: metrics.risk_score, maintainabil
 /** What a method's hash covers. Part of a parse's identity, so a parse cached under another definition is not reused. */
 export const METHOD_HASH = 'comment-and-body';
 
-/** Named methods of one file, each with a stable id and a hash of what a question about it is shown: its comment and body. */
-function methodsOf(path, declarations, lines) {
+const comment = text => /^\s*(\/\/|\/\*|\*|#(?!\s*define)|"""|''')/.test(text);
+
+/** A line that is code: not blank, not a comment, not an import. */
+export const isCode = text => Boolean(text.trim()) && !comment(text) && !/^\s*(import|from|use|package)\b|^\s*#\s*include\b/.test(text);
+
+/** The name of the unit that holds a file's code outside named functions. */
+export const TOP_LEVEL = '<top-level>';
+
+/**
+ * Returns the methods of one file, each with an id and a hash of its source. An unnamed function is not a method; it is read as
+ * part of the method that contains it, or as part of the file's top-level unit. The top-level unit is added last, and its
+ * `lines` lists the line numbers it covers.
+ */
+export function methodsOf(path, analysis, lines) {
   const seen = new Map(), methods = [];
-  for (const declaration of declarations) {
-    if (declaration.name === '<anonymous>') continue;
-    const base = `${path}::${declaration.qualified_name}`;
+  const add = (method, shown) => {
+    const base = `${path}::${method.qualified_name}`;
     const count = (seen.get(base) ?? 0) + 1;
     seen.set(base, count);
-    methods.push({ id: count > 1 ? `${base}#${count}` : base, node: declaration.id, name: declaration.name, qualified_name: declaration.qualified_name, line: declaration.line, end_line: declaration.end_line,
-      hash: sha256(shownSource(lines, declaration.line, declaration.end_line)), metrics: trim(declaration.metrics) });
+    methods.push({ id: count > 1 ? `${base}#${count}` : base, ...method, hash: sha256(shown) });
+  };
+  for (const declaration of analysis.declarations) {
+    // Unnamed: its lines are covered by the method that contains it, or by analysis.top_level.
+    if (!isNamed(declaration.qualified_name)) continue;
+    const name = declaration.name === '<anonymous>' ? declaration.qualified_name.split('.').at(-1) : declaration.name;
+    add({ node: declaration.id, name, qualified_name: declaration.qualified_name, line: declaration.line, end_line: declaration.end_line, metrics: trim(declaration.metrics) },
+      shownSource(lines, declaration.line, declaration.end_line));
+  }
+  // A comment directly above a function belongs to that function, not to the top-level unit.
+  const described = new Set();
+  for (const method of methods) for (let line = method.line - 1; line >= 1 && comment(lines[line - 1]); line--) described.add(line);
+  const outside = (analysis.top_level ?? []).filter(line => !described.has(line));
+  const code = outside.filter(line => isCode(lines[line - 1] ?? ''));
+  if (code.length) {
+    const own = outside.filter(line => line >= code[0] && line <= code.at(-1));
+    add({ node: null, name: TOP_LEVEL, qualified_name: TOP_LEVEL, line: code[0], end_line: code.at(-1), lines: own, metrics: null }, own.map(line => lines[line - 1]).join('\n'));
   }
   return methods;
 }
 
-/** The named method whose range contains a line, innermost first; anonymous functions attribute to their enclosing method. */
+/** Returns the id of the smallest method containing a line. A top-level unit only contains the lines in its `lines`. */
 function ownerAt(methods, line) {
   let owner = null;
   for (const method of methods) {
-    if (method.line <= line && line <= method.end_line && (!owner || method.end_line - method.line < owner.end_line - owner.line)) owner = method;
+    if (method.line <= line && line <= method.end_line && (!method.lines || method.lines.includes(line))
+      && (!owner || method.end_line - method.line < owner.end_line - owner.line)) owner = method;
   }
   return owner?.id ?? null;
 }
@@ -73,7 +100,7 @@ export async function analyzeFiles(files, { analyzer, readSource, progress = () 
         coverage.parser_diagnostics.push({ path: file.path, status: 'parsed', message: analysis.parser_message, diagnostics: analysis.diagnostics.slice(0, 8) });
     }
     functions += analysis.declarations.length;
-    const methods = methodsOf(file.path, analysis.declarations, source.split('\n'));
+    const methods = methodsOf(file.path, analysis, source.split('\n'));
     const byNode = new Map(methods.map(method => [method.node, method.id]));
     const calls = analysis.references.filter(reference => reference.kind === 'call' && reference.name !== '<dynamic>')
       .map(reference => ({ name: reference.name, from: byNode.get(reference.source) ?? ownerAt(methods, reference.line), line: reference.line })).filter(call => call.from);
