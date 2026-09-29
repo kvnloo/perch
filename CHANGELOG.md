@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0](https://github.com/kvnloo/perch/compare/v0.3.5...v0.4.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* report scans to Perch Cloud and replace local answer reuse ([#170](https://github.com/kvnloo/perch/issues/170))
+* A scan asks one broad bug question, `has_bug`, alerting at 60%, and `kind` names what it found. The 15 specific bug checks are gone: on held-out bug pairs they added false alerts without ranking bugs any better. Security is asked only with `--filter type=security` or `security` in `scan_types`. It asks the 2025 CWE Top 25, less CWE-20, plus six more classes, filtered by language: 21 checks for Python, JavaScript and TypeScript, 22 for Java and Go, 28 for Rust, 30 for C and C++. Security findings use labels such as `sql_injection` and `missing_authorization`, so filters and closures written against the old labels no longer match. See the [benchmark results](https://huggingface.co/datasets/perchscan/benchmark-results).
+
+### Features
+
+* one bug question, and security checks chosen by CWE and language ([#172](https://github.com/kvnloo/perch/issues/172)) ([9398517](https://github.com/kvnloo/perch/commit/9398517a6f6c20d7af0c3aa4f85e9b1f27739a63))
+* report scans to Perch Cloud and replace local answer reuse ([#170](https://github.com/kvnloo/perch/issues/170)) ([268f9e1](https://github.com/kvnloo/perch/commit/268f9e1ef09323ff200e5949e7ec560dca0fc39d))
+
+
+### Bug Fixes
+
+* a method or file needing more than 64 requests was skipped instead of read ([#179](https://github.com/kvnloo/perch/issues/179)) ([0f3269c](https://github.com/kvnloo/perch/commit/0f3269c70e48b5e4cba46fafea48a7ddb64b6f9a))
+* perch issues &lt;id&gt; printed documented NaN% on a default scan ([#165](https://github.com/kvnloo/perch/issues/165)) ([b50eb63](https://github.com/kvnloo/perch/commit/b50eb6365fee3fc94ae2b761b558dce0f86d8f08))
+* perch scan &lt;path&gt; read nothing when ignore covered it ([#177](https://github.com/kvnloo/perch/issues/177)) ([eaa137b](https://github.com/kvnloo/perch/commit/eaa137bf229ba5947740ea0c82820bd5517b17fb))
+* pull requests ran Perch twice ([#211](https://github.com/kvnloo/perch/issues/211)) ([3903626](https://github.com/kvnloo/perch/commit/3903626842356be8cf65b8af2af16027e77c6379))
+
 ## [0.3.5](https://github.com/lakeday-org/perch/compare/v0.3.4...v0.3.5) (2026-09-24)
 
 
