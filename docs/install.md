@@ -31,10 +31,11 @@ npx @lakeday/perch scan
 ## The key
 
 Create an API key at [console.typesafe.ai](https://console.typesafe.ai) and set
-it as `PERCH_API_KEY`:
+the full System One request URL and your key:
 
 ```sh
-export PERCH_API_KEY=<your TypeSafe API key>
+export PERCH_BASE_URL=https://api.typesafe.ai/v1/systemone
+export PERCH_API_KEY='paste-your-TypeSafe-key-here'
 ```
 
 To use another endpoint, see [Environment](/cli/#environment).

@@ -27,12 +27,14 @@ Semantic code linting with Jev.
 
 ## Getting started
 
-Create an API key at [console.typesafe.ai](https://console.typesafe.ai) and set
-it as `PERCH_API_KEY`.
+Create an API key at [console.typesafe.ai](https://console.typesafe.ai), then set
+the System One request URL and your key:
 
 ```sh
 npm install -g @lakeday/perch
-export PERCH_API_KEY=<your TypeSafe API key>
+export PERCH_BASE_URL=https://api.typesafe.ai/v1/systemone
+export PERCH_API_KEY='paste-your-TypeSafe-key-here'
+perch scan
 ```
 
 ```console

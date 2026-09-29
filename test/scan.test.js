@@ -197,7 +197,7 @@ describe('perch hunt', () => {
     expect(systemOne.calls.every(call => 'cwe_89' in call.questions)).toBe(true);
   });
 
-  it('refreshes method, file and search answers when the model or endpoint changes', async () => {
+  it('asks method, file and search questions on every run with the configured model and endpoint', async () => {
     const repo = await fixture();
     await writeFile(join(repo.root, 'perch.yaml'), 'rules:\n  - name: file-rule\n    where: src/a.js\n    ensure: Returns a number.\n  - name: search-rule\n    where: src/a.js\n    ensure_present: A function returning a number.\n');
     await commitAll(repo.root, 'file and search rules');
@@ -223,9 +223,10 @@ describe('perch hunt', () => {
       expect(requests.some(request => request.questions['search-rule'])).toBe(true);
       expect(requests.every(request => request.url === configuration.baseUrl && request.model === configuration.model)).toBe(true);
 
+      const count = requests.length;
       requests.length = 0;
       await scanRepository(await withRevision(repo, { systemOne }));
-      expect(requests).toEqual([]);
+      expect(requests).toHaveLength(count);
     }
   });
 
@@ -259,9 +260,10 @@ describe('perch hunt', () => {
     expect(issueWeight(harmless)).toBeCloseTo(0.8);
   });
 
-  it('walks every method once from riskiest down, logs each, and skips unchanged methods next time', async () => {
+  it('walks every method once from riskiest down, logs each, and asks about every one again next time', async () => {
     const repo = await fixture({ scanTypes: ['defect', 'security', 'lint', 'refactor', 'docs'] });
-    const systemOne = scriptedSystemOne({ 'src/a.js::f': { has_bug: 0.9, where: 'L0004', kind: 'boundary', severity: 2, refactor: 'split', documented: 0.3 } });
+    const answers = { 'src/a.js::f': { has_bug: 0.9, where: 'L0004', kind: 'boundary', severity: 2, refactor: 'split', documented: 0.3 } };
+    const systemOne = scriptedSystemOne(answers);
     const seen = [], checkpoints = [];
     const ask = systemOne.ask.bind(systemOne);
     systemOne.ask = async (...args) => {
@@ -338,18 +340,16 @@ describe('perch hunt', () => {
     expect(failing.map(issue => issue.label)).toContain('off_by_one');
     expect(failing.map(issue => issue.label)).toContain('too_big');
 
-    // A second run over code nothing has touched asks nothing: the same state and the same questions have an answer already, and
-    // asking again would spend a request to be told what is on disk while moving the numbers on an issue nobody has touched.
-    const untouched = scriptedSystemOne();
+    // A second run over code nothing has touched asks again. Caching answers is the endpoint's job: Perch Cloud shares them across
+    // a team and CI, which a file in one checkout cannot.
+    const untouched = scriptedSystemOne(answers);
     const again = await scanRepository(await withRevision(repo, { systemOne: untouched }));
-    expect(again.calls).toBe(0);
-    expect(again.carried).toBe(4);
-    expect(untouched.calls).toHaveLength(0);
-    expect(scanCount(again)).toMatch(/at commit [0-9a-f]{7}: 4 methods, read 0, 4 unchanged$/);
-    // And what it carried is what it said before, to the percentage.
+    expect(again.calls).toBe(4);
+    expect(untouched.calls).toHaveLength(4);
+    expect(scanCount(again)).toMatch(/at commit [0-9a-f]{7}: 4 methods, read 4$/);
     expect((await openStore(repo.out).findings(0)).find(finding => finding.method === 'src/a.js::f').has_bug).toBe(0.9);
 
-    // --paths is the universe: only what it names is considered at all, read or carried.
+    // --paths is the universe: only what it names is considered at all.
     const narrowed = await scanRepository(await withRevision(repo, { systemOne: scriptedSystemOne(), paths: ['src/b.js'] }));
     expect(narrowed.methods).toBe(2);
     expect(narrowed.visited.every(visit => visit.path === 'src/b.js')).toBe(true);
@@ -365,7 +365,7 @@ describe('perch hunt', () => {
     const edited = scriptedSystemOne({ 'src/a.js::f': { has_bug: 0.3 } });
     const fresh = await scanRepository(await withRevision(repo, { systemOne: edited, revision: await revision(repo.root) }));
     expect(edited.calls.map(call => call.method)).toContain('src/a.js::f');
-    expect(fresh.carried).toBeLessThan(4);
+    expect(fresh.calls).toBe(4);
     // 0.3 is below the floor, so f is no longer listed as a defect; asking for everything shows the answer did change.
     expect((await openStore(repo.out).findings()).some(finding => finding.method === 'src/a.js::f')).toBe(false);
     expect((await openStore(repo.out).findings(0)).find(finding => finding.method === 'src/a.js::f').has_bug).toBe(0.3);
@@ -406,13 +406,16 @@ describe('perch hunt', () => {
   it('finishes the file it is in, then follows the neighbor the model points at', async () => {
     const repo = await fixture();
     const systemOne = scriptedSystemOne({ 'src/a.js::f': { follow: 'src/b.js::h' }, 'src/b.js::h': { follow: 'src/b.js::k' } });
-    const seen = [];
-    const run = await scanRepository(await withRevision(repo, { systemOne, parallel: 1, onFile: path => seen.push(path) }));
+    const seen = [], sent = [];
+    const run = await scanRepository(await withRevision(repo, { systemOne, parallel: 1,
+      onFinding: finding => sent.push(`method:${finding.method}`), onFile: path => { seen.push(path); sent.push(`file:${path}`); } }));
     // A run over a repository is read file by file, so the rest of src/a.js comes before the method the model pointed at in
     // src/b.js. What the model said still decides which file is opened next.
     expect(run.visited.map(visit => visit.method)).toEqual(['src/a.js::f', 'src/a.js::g', 'src/b.js::h', 'src/b.js::k']);
     // Which is what lets a file be reported while the run is still going, rather than everything arriving at the end.
     expect(seen).toEqual(['src/a.js', 'src/b.js']);
+    expect(sent).toEqual(['method:src/a.js::f', 'method:src/a.js::g', 'file:src/a.js',
+      'method:src/b.js::h', 'method:src/b.js::k', 'file:src/b.js']);
     expect(run.calls).toBe(4);
     expect(run.remaining).toBe(0);
   });

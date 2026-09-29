@@ -1,4 +1,4 @@
-/** `perch scan`: analyze every tracked source file at a revision and rank the files by risk. No worktree, no commands, no model. */
+/** `perch scan`: analyze every tracked source file at a revision and rank the files by risk. No model. */
 import { join } from 'node:path';
 import { listTree, readBlobs } from './git.js';
 import { analyzeFiles, sourceFile } from './analysis.js';
@@ -16,6 +16,8 @@ export async function analyzeTree({ root, revision, out, analyzer, label = root,
   const store = openStore(out);
   const id = scanIdentity({ revision, paths });
   const dir = store.scanDir(id), scanPath = join(dir, 'scan.json');
+  // A parse is local work the model never sees, and perch issues parses on every call to tell which findings still exist. The
+  // same commit and paths parse the same way, so a finished one is the answer.
   const existing = await readJson(scanPath, null);
   if (existing?.status === 'complete') {
     debug(`scan ${id} already complete; reusing ${scanPath}`);
@@ -39,5 +41,6 @@ export async function analyzeTree({ root, revision, out, analyzer, label = root,
   const scan = { id, status: 'complete', target: label, github, root, revision, paths, out: dir, created_at: new Date().toISOString(),
     coverage: { ...analysis.coverage, excluded: tree.filter(item => item.type === 'blob').length - sources.length }, functions: analysis.functions, files: analysis.files, candidates: analysis.candidates };
   await writeJson(scanPath, scan);
+  await store.prune('scans', id).catch(error => log(`Could not remove earlier scans: ${error.message}`));
   return scan;
 }

@@ -217,7 +217,6 @@ export function scanTally(findings, min = 0, color = COLOR(), filters = []) {
 export function scanCount(run) {
   const read = (run.visited ?? []).filter(visit => visit.status === 'read').length;
   const parts = [`${run.methods} methods`, `read ${read}`];
-  if (run.carried) parts.push(`${run.carried} unchanged`);
   if (run.remaining) parts.push(`${run.remaining} unread`);
   if (run.failed?.length) parts.push(`${run.failed.length} could not be read (perch doctor)`);
   if (run.error) parts.push(`error: ${run.error}`);
@@ -462,4 +461,3 @@ export function issueOutcome(before = [], after = []) {
   const seen = new Set(before.map(issue => issue.label));
   return { gone, left, added: after.filter(issue => !seen.has(issue.label)) };
 }
-

@@ -51,6 +51,16 @@ export async function removeWorktree(root, dir) {
 /** The content of one tracked blob, read without a checkout. */
 export const readBlob = (root, sha) => git(['cat-file', 'blob', sha], root);
 
+/** Git writes a decimal blob length before its bytes; refuse lengths JavaScript cannot index exactly. */
+export function batchBlobSize(header, prefixBytes) {
+  const match = /^[0-9a-f]+ blob ([0-9]+)$/.exec(header);
+  const size = Number(match?.[1]);
+  if (!match || !Number.isSafeInteger(size) || !Number.isSafeInteger(prefixBytes + size + 1)) {
+    throw new Error(`git cat-file --batch returned an invalid blob header: ${header}`);
+  }
+  return size;
+}
+
 /** Many blobs through one `git cat-file --batch` process, delivered in order to `onBlob(index, text)`. */
 export function readBlobs(root, shas, onBlob) {
   return new Promise((resolve, reject) => {
@@ -62,7 +72,7 @@ export function readBlobs(root, shas, onBlob) {
         if (newline < 0) return;
         const header = pending.subarray(0, newline).toString();
         if (header.endsWith(' missing')) throw new Error(`git cat-file: ${header}`);
-        const size = Number(header.split(' ')[2]);
+        const size = batchBlobSize(header, newline + 1);
         if (pending.length < newline + 1 + size + 1) return;
         onBlob(index++, pending.subarray(newline + 1, newline + 1 + size).toString('utf8'));
         pending = pending.subarray(newline + 1 + size + 1);

@@ -1,0 +1,21 @@
+# Perch Cloud is where questions go unless PERCH_BASE_URL says otherwise. A scan's result is its exit code, and the dashboard
+# is a view of it.
+- name: cloud-unless-base-url
+  where: src/cloud-client.js
+  ensure: >-
+    Read credentialSource. Questions go to Perch Cloud unless PERCH_BASE_URL
+    is set. Choosing another endpoint because of anything else, such as an
+    API key being set or a Cloud URL setting, breaks this rule.
+- name: upload-keeps-the-exit-code
+  where: src/cli.js
+  ensure: >-
+    Read the end of the scan command. The exit code is decided from the
+    findings before results are sent to Perch Cloud, and a failed upload is
+    reported as a note. Throwing on a failed upload, or returning a different
+    code because of one, breaks this rule.
+- name: local-commands-skip-cloud-config
+  where: src/cli.js
+  ensure: >-
+    Read main. ~/.perch/config.toml is read only for login, scan and check.
+    Reading it before every command, so that a broken file fails perch issues
+    or perch close, breaks this rule.
